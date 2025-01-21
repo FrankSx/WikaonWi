@@ -41,7 +41,7 @@ Proof of Concept Code
 Below is a Python script that demonstrates the steps outlined above. This script is for educational purposes only and should not be used for malicious activities.
 
 
-        
+```        
         
 import subprocess
 import time
@@ -129,7 +129,7 @@ if __name__ == "__main__":
     main()
 
     
-
+```
     
 
 Conclusion
