@@ -4,7 +4,6 @@ Wikaonwi: A Factory Wi-Fi Credential Vulnerability
 
 Date: 1/21/25 9:35 PM
 
-Today, I faced a setback when I was declined a position in the cyber security field due to a prior criminal conviction related to fraud. However, I refuse to let this discourage me. Instead, I am determined to showcase my skills and resilience by releasing another piece of my work. In a future post, I will also cover the details surrounding the charges that led to this situation. This is just one step in my journey, and I won’t allow past challenges to define my future.
 Wikaonwi:
 
 In the ever-evolving landscape of cybersecurity, vulnerabilities can often be found in the most unexpected places. One such vulnerability has been identified in the Kaon DG2144 router, where the factory Wi-Fi password is not as random as one might expect. This flaw can lead to the easy recovery of a device's Wi-Fi credentials, posing a significant risk to users. In this blog post, we will explore the details of this vulnerability, how it can be exploited, and provide a proof of concept for educational purposes.
